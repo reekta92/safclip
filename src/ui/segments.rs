@@ -43,23 +43,25 @@ pub fn render(f: &mut Frame, state: &AppState, area: Rect, theme: &Theme) {
         .map(|(i, s)| {
             let label = s.label.as_deref().unwrap_or("");
             let is_selected = Some(i) == state.selected_segment;
-            let marker = if is_selected { "▸ " } else { "· " };
-            
-            let mut style = Style::default();
-            if is_selected {
-                style = style.fg(theme.accent).add_modifier(Modifier::BOLD);
+            let palette = theme.segment_palette();
+            let seg_color = palette[i % palette.len()];
+            let marker_span = if is_selected {
+                Span::styled("▸ ", Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
             } else {
-                style = style.fg(theme.fg);
-            }
-
+                Span::styled("· ", Style::default().fg(theme.muted))
+            };
+            let text_style = if is_selected {
+                Style::default().fg(seg_color).add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(seg_color)
+            };
             let content = format!(
-                "{}{} - {} {}",
-                marker,
+                "{} - {} {}",
                 format_time(s.start_seconds),
                 format_time(s.end_seconds),
                 if !label.is_empty() { format!("[{}]", label) } else { "".to_string() }
             );
-            ListItem::new(Line::from(content)).style(style)
+            ListItem::new(Line::from(vec![marker_span, Span::styled(content, text_style)]))
         })
         .collect();
 

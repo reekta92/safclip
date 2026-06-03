@@ -11,7 +11,7 @@ pub fn render(f: &mut Frame, state: &AppState, area: Rect, theme: &Theme) {
     } else if let Some(msg) = &state.status_message {
         msg.as_str()
     } else {
-        "q:quit ?:help Space:play/pause ←→:seek a/d:mark Del:del e/E:export Tab:player u/Ctrl+R:undo/redo"
+        "q:quit ?:help Space:play/pause ←→:seek a/d:mark s:del e/E:export Tab:player u/Ctrl+R:undo/redo"
     };
 
     let status = Paragraph::new(content)

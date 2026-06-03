@@ -54,8 +54,21 @@ impl Theme {
     pub fn title_bar_bg(&self) -> Style {
         Style::default()
     }
-
     pub fn popup_bg(&self) -> Style {
         Style::default()
+    }
+    pub fn segment_palette(&self) -> [Color; 10] {
+        [
+            self.destructive,          // Soft Red
+            Color::LightBlue,           // Soft Blue
+            self.success,              // Soft Green
+            Color::LightMagenta,        // Soft Purple/Magenta
+            self.accent,               // Soft Cyan
+            Color::Rgb(240, 160, 80),  // Soft Orange
+            Color::Rgb(180, 140, 220), // Soft Lavender/Purple
+            Color::Rgb(100, 200, 180), // Soft Teal
+            Color::Rgb(255, 180, 200), // Soft Pink
+            Color::Rgb(230, 190, 80),  // Soft Gold/Yellow
+        ]
     }
 }

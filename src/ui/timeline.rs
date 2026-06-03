@@ -136,27 +136,20 @@ pub fn render(f: &mut Frame, state: &mut AppState, area: Rect, theme: &Theme) {
     let played_color = theme.accent;
     let unplayed_color = Color::Rgb(50, 50, 50);
     
-    // Fill initially with unplayed dark blocks
-    let mut bar_spans_top = vec![Span::styled("█", Style::default().fg(unplayed_color)); width];
-    let mut bar_spans_bottom = vec![Span::styled("█", Style::default().fg(unplayed_color)); width];
-
-    // Fill played portion (up to the cursor)
+    // Fill initially with unplayed dark braille dots (⠤)
+    let mut bar_spans_top = vec![Span::styled("⠤", Style::default().fg(unplayed_color)); width];
+    let mut bar_spans_bottom = vec![Span::styled("⠤", Style::default().fg(unplayed_color)); width];
+    // Fill played portion (up to the cursor) with thick braille dots (⠶)
     let cursor_clamp = cursor_px.clamp(0, width as i32) as usize;
     for x in 0..cursor_clamp {
         if x < width {
-            bar_spans_top[x] = Span::styled("█", Style::default().fg(played_color));
-            bar_spans_bottom[x] = Span::styled("█", Style::default().fg(played_color));
+            bar_spans_top[x] = Span::styled("⠶", Style::default().fg(played_color));
+            bar_spans_bottom[x] = Span::styled("⠶", Style::default().fg(played_color));
         }
     }
 
     // Segment color palette
-    let palette = [
-        theme.destructive,
-        Color::LightBlue,
-        theme.success,
-        Color::LightMagenta,
-        theme.accent,
-    ];
+    let palette = theme.segment_palette();
 
     // Fill segments on progress bar
     for (i, segment) in state.segments.iter().enumerate() {

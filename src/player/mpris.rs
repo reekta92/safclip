@@ -37,10 +37,18 @@ impl PlayerController for MprisPlayer {
 
     fn seek_absolute(&mut self, position: f64) -> Result<(), String> {
         let position_us = (position * 1_000_000.0) as u64; // SetPosition expects microseconds
-        let metadata = self.player.get_metadata().map_err(|e| e.to_string())?;
-        let track_id = metadata.track_id().ok_or_else(|| "No track ID available".to_string())?;
-        // SetPosition takes TrackId and position (in microseconds)
-        self.player.set_position(track_id, &Duration::from_micros(position_us)).map_err(|e| e.to_string())
+        // 1. Try standard SetPosition if metadata and track ID are available
+        if let Ok(metadata) = self.player.get_metadata() {
+            if let Some(track_id) = metadata.track_id() {
+                if self.player.set_position(track_id, &Duration::from_micros(position_us)).is_ok() {
+                    return Ok(());
+                }
+            }
+        }
+        // 2. Fallback: Seek relatively based on current position
+        let current_pos = self.position();
+        let offset = position - current_pos;
+        self.seek(offset)
     }
 
     fn position(&self) -> f64 {
@@ -72,7 +80,12 @@ impl PlayerController for MprisPlayer {
         let metadata = self.player.get_metadata().ok()?;
         let url = metadata.url()?;
         let path = if let Some(stripped) = url.strip_prefix("file://") {
-            percent_decode(stripped).unwrap_or_else(|| stripped.to_string())
+            let path_without_host = if let Some(host_stripped) = stripped.strip_prefix("localhost") {
+                host_stripped
+            } else {
+                stripped
+            };
+            percent_decode(path_without_host).unwrap_or_else(|| path_without_host.to_string())
         } else {
             url.to_string()
         };

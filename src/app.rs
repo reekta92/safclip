@@ -444,6 +444,26 @@ impl AppState {
                     self.selected_segment = Some(0);
                 }
             }
+            AppAction::SeekToSegmentStart => {
+                if let Some(idx) = self.selected_segment {
+                    if idx < self.segments.len() {
+                        let start = self.segments[idx].start_seconds;
+                        if let Some(player) = self.active_player_mut() {
+                            let _ = player.seek_absolute(start);
+                        }
+                    }
+                }
+            }
+            AppAction::SeekToSegmentEnd => {
+                if let Some(idx) = self.selected_segment {
+                    if idx < self.segments.len() {
+                        let end = self.segments[idx].end_seconds;
+                        if let Some(player) = self.active_player_mut() {
+                            let _ = player.seek_absolute(end);
+                        }
+                    }
+                }
+            }
             AppAction::ZoomIn => {
                 self.timeline_state.zoom_in(1.5, self.current_time);
             }

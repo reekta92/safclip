@@ -20,7 +20,7 @@ pub fn render(f: &mut Frame, area: Rect, theme: &Theme) {
 
     // Section: Navigation
     lines.push(Line::from(Span::styled("Navigation", Style::default().fg(theme.heading).add_modifier(Modifier::BOLD))));
-    lines.push(key_line("← / →", "Seek ±1s", theme));
+    lines.push(key_line("←/→ or h/l", "Seek ±1s", theme));
     lines.push(key_line("Shift+← / →", "Seek ±5s", theme));
     lines.push(key_line("Alt+← / →", "Seek ±10s", theme));
     lines.push(key_line("Home / End", "Jump to start/end", theme));
@@ -46,8 +46,9 @@ pub fn render(f: &mut Frame, area: Rect, theme: &Theme) {
     lines.push(Line::from(Span::styled("Segments", Style::default().fg(theme.heading).add_modifier(Modifier::BOLD))));
     lines.push(key_line("a", "Set IN point", theme));
     lines.push(key_line("d", "Set OUT point (creates segment)", theme));
-    lines.push(key_line("Delete / x", "Delete selected segment", theme));
-    lines.push(key_line("↑ / ↓", "Select prev/next segment", theme));
+    lines.push(key_line("Delete / x / s", "Delete selected segment", theme));
+    lines.push(key_line("↑/↓ or k/j", "Select prev/next segment", theme));
+    lines.push(key_line("H/L or Sh+h/l", "Seek to start/end of segment", theme));
 
     // Section: Export
     lines.push(Line::from(""));

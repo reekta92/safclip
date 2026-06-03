@@ -18,6 +18,8 @@ pub enum AppAction {
     SelectPrevSegment,
     SelectNextSegment,
     SnapToKeyframe,
+    SeekToSegmentStart,
+    SeekToSegmentEnd,
     TogglePlay,
     Export,
     ExportMerged,
@@ -49,8 +51,8 @@ fn handle_key_event(key: KeyEvent) -> AppAction {
     match (key.code, key.modifiers) {
         (KeyCode::Char('q'), KeyModifiers::NONE) => AppAction::Quit,
 
-        (KeyCode::Left, KeyModifiers::NONE) => AppAction::SeekBackward(1.0),
-        (KeyCode::Right, KeyModifiers::NONE) => AppAction::SeekForward(1.0),
+        (KeyCode::Left, KeyModifiers::NONE) | (KeyCode::Char('h'), KeyModifiers::NONE) => AppAction::SeekBackward(1.0),
+        (KeyCode::Right, KeyModifiers::NONE) | (KeyCode::Char('l'), KeyModifiers::NONE) => AppAction::SeekForward(1.0),
         (KeyCode::Left, KeyModifiers::SHIFT) => AppAction::SeekBackward(5.0),
         (KeyCode::Right, KeyModifiers::SHIFT) => AppAction::SeekForward(5.0),
         (KeyCode::Left, KeyModifiers::ALT) => AppAction::SeekBackward(10.0),
@@ -65,9 +67,11 @@ fn handle_key_event(key: KeyEvent) -> AppAction {
         (KeyCode::Char('d'), KeyModifiers::NONE) => AppAction::SetOutPoint,
 
         (KeyCode::Enter, KeyModifiers::NONE) => AppAction::ConfirmSegment,
-        (KeyCode::Delete, KeyModifiers::NONE) | (KeyCode::Char('x'), KeyModifiers::NONE) => AppAction::DeleteSegment,
-        (KeyCode::Up, KeyModifiers::NONE) => AppAction::SelectPrevSegment,
-        (KeyCode::Down, KeyModifiers::NONE) => AppAction::SelectNextSegment,
+        (KeyCode::Delete, KeyModifiers::NONE) | (KeyCode::Char('x'), KeyModifiers::NONE) | (KeyCode::Char('s'), KeyModifiers::NONE) => AppAction::DeleteSegment,
+        (KeyCode::Up, KeyModifiers::NONE) | (KeyCode::Char('k'), KeyModifiers::NONE) => AppAction::SelectPrevSegment,
+        (KeyCode::Down, KeyModifiers::NONE) | (KeyCode::Char('j'), KeyModifiers::NONE) => AppAction::SelectNextSegment,
+        (KeyCode::Char('H'), _) | (KeyCode::Char('h'), KeyModifiers::SHIFT) => AppAction::SeekToSegmentStart,
+        (KeyCode::Char('L'), _) | (KeyCode::Char('l'), KeyModifiers::SHIFT) => AppAction::SeekToSegmentEnd,
 
         (KeyCode::Char('e'), KeyModifiers::NONE) => AppAction::Export,
         (KeyCode::Char('E'), _) | (KeyCode::Char('e'), KeyModifiers::SHIFT) => AppAction::ExportMerged,
