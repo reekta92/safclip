@@ -23,6 +23,7 @@ pub enum AppAction {
     TogglePlay,
     Export,
     ExportMerged,
+    ExportSelected,
     ToggleHelp,
     OpenFile(String),
     Undo,
@@ -75,6 +76,7 @@ fn handle_key_event(key: KeyEvent) -> AppAction {
 
         (KeyCode::Char('e'), KeyModifiers::NONE) => AppAction::Export,
         (KeyCode::Char('E'), _) | (KeyCode::Char('e'), KeyModifiers::SHIFT) => AppAction::ExportMerged,
+        (KeyCode::Char('e'), KeyModifiers::CONTROL) => AppAction::ExportSelected,
 
         (KeyCode::Char('K'), _) | (KeyCode::Char('k'), KeyModifiers::SHIFT) => AppAction::SnapToKeyframe,
 

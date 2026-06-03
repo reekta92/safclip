@@ -52,6 +52,9 @@ pub struct AppState {
     pub label_input: String, // to store editing label text
     pub poll_count: usize,
     pub pending_session: Option<crate::session::SessionData>,
+    pub last_seek_time: std::time::Instant,
+    pub last_click_time: std::time::Instant,
+    pub last_click_pos: (u16, u16),
 }
 
 impl AppState {
@@ -87,6 +90,9 @@ impl AppState {
             poll_count: 0,
             label_input: String::new(),
             pending_session: None,
+            last_seek_time: std::time::Instant::now(),
+            last_click_time: std::time::Instant::now(),
+            last_click_pos: (0, 0),
         }
     }
 
@@ -576,6 +582,8 @@ impl AppState {
                         if let Some(p) = self.active_player_mut() {
                             let _ = p.seek_absolute(target_time);
                         }
+                        self.current_time = target_time.clamp(0.0, self.timeline_state.duration);
+                        self.last_seek_time = std::time::Instant::now();
                     } else if button == MouseButton::Right {
                         self.is_panning_timeline = true;
                         self.drag_last_col = col;
@@ -598,8 +606,13 @@ impl AppState {
                 if self.is_dragging_timeline {
                     let pixel_x = col.saturating_sub(self.timeline_rect.0);
                     let target_time = self.timeline_state.pixel_to_time(pixel_x, self.timeline_rect.2);
-                    if let Some(p) = self.active_player_mut() {
-                        let _ = p.seek_absolute(target_time);
+                    self.current_time = target_time.clamp(0.0, self.timeline_state.duration);
+                    let now = std::time::Instant::now();
+                    if now.duration_since(self.last_seek_time) >= std::time::Duration::from_millis(50) {
+                        if let Some(p) = self.active_player_mut() {
+                            let _ = p.seek_absolute(target_time);
+                        }
+                        self.last_seek_time = now;
                     }
                 } else if self.is_panning_timeline {
                     let delta = col as i16 - self.drag_last_col as i16;
@@ -620,8 +633,10 @@ impl AppState {
                             let _ = p.play();
                         }
                     }
+                    self.current_time = target_time.clamp(0.0, self.timeline_state.duration);
+                } else if self.is_panning_timeline {
+                    self.is_panning_timeline = false;
                 }
-                self.is_panning_timeline = false;
             }
             AppAction::RestoreSession | AppAction::DiscardSession => {}
             AppAction::MouseScroll { up, row: _, col } => {
