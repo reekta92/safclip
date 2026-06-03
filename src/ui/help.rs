@@ -46,6 +46,7 @@ pub fn render(f: &mut Frame, area: Rect, theme: &Theme) {
     lines.push(Line::from(Span::styled("Segments", Style::default().fg(theme.heading).add_modifier(Modifier::BOLD))));
     lines.push(key_line("a", "Set IN point", theme));
     lines.push(key_line("d", "Set OUT point (creates segment)", theme));
+    lines.push(key_line("r", "Rename selected segment", theme));
     lines.push(key_line("Delete / x / s", "Delete selected segment", theme));
     lines.push(key_line("↑/↓ or k/j", "Select prev/next segment", theme));
     lines.push(key_line("H/L or Sh+h/l", "Seek to start/end of segment", theme));
@@ -55,7 +56,7 @@ pub fn render(f: &mut Frame, area: Rect, theme: &Theme) {
     lines.push(Line::from(Span::styled("Export", Style::default().fg(theme.heading).add_modifier(Modifier::BOLD))));
     lines.push(key_line("e", "Export segments as separate clips", theme));
     lines.push(key_line("E (Shift+e)", "Export merged clip", theme));
-
+    lines.push(key_line("Ctrl+e", "Export selected segment only", theme));
     // Section: General
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled("General", Style::default().fg(theme.heading).add_modifier(Modifier::BOLD))));

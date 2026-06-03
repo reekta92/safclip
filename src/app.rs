@@ -247,8 +247,11 @@ impl AppState {
                     let player = &self.available_players[idx];
                     (player.position(), player.duration(), !player.is_paused(), player.source_path())
                 };
-
-                self.current_time = pos;
+                
+                // INHIBIT POSITION POLLING DURING INTERACTION
+                if !self.is_dragging_timeline && std::time::Instant::now().duration_since(self.last_seek_time) > std::time::Duration::from_millis(150) {
+                    self.current_time = pos;
+                }
                 self.player_playing = playing;
 
                 // Sync timeline duration if timeline duration is 0 but player reports a positive duration
@@ -280,6 +283,18 @@ impl AppState {
                     }
                 }
             }
+        }
+        self.sync_auto_selection();
+    }
+
+    pub fn sync_auto_selection(&mut self) {
+        let time = self.current_time;
+        if let Some(idx) = self.segments.iter().position(|s| time >= s.start_seconds && time <= s.end_seconds) {
+            if self.selected_segment != Some(idx) {
+                self.selected_segment = Some(idx);
+            }
+        } else {
+            self.selected_segment = None;
         }
     }
 
@@ -317,8 +332,36 @@ impl AppState {
     }
 
     pub fn apply_action(&mut self, action: AppAction) {
+        if self.mode == AppMode::EditLabel {
+            match &action {
+                AppAction::Char(c) => {
+                    self.label_input.push(*c);
+                }
+                AppAction::Backspace => {
+                    self.label_input.pop();
+                }
+                AppAction::ConfirmSegment | AppAction::EditLabel => {
+                    if let Some(idx) = self.selected_segment {
+                        if idx < self.segments.len() {
+                            self.push_undo();
+                            self.segments[idx].label = if self.label_input.is_empty() { None } else { Some(self.label_input.clone()) };
+                            self.save_session();
+                        }
+                    }
+                    self.mode = AppMode::Normal;
+                }
+                AppAction::Cancel => {
+                    self.mode = AppMode::Normal;
+                }
+                AppAction::Quit => {
+                    self.should_quit = true;
+                }
+                _ => {}
+            }
+            return;
+        }
         if self.mode == AppMode::SessionRestore {
-            match action {
+            match &action {
                 AppAction::RestoreSession | AppAction::ConfirmSegment => {
                     if let Some(session_data) = self.pending_session.take() {
                         self.segments = session_data.segments;
@@ -328,6 +371,7 @@ impl AppState {
                         self.mode = AppMode::Normal;
                         self.status_message = Some("Session restored.".to_string());
                         self.save_session();
+                        self.sync_auto_selection();
                     } else {
                         self.mode = AppMode::Normal;
                     }
@@ -337,6 +381,7 @@ impl AppState {
                     self.mode = AppMode::Normal;
                     self.status_message = Some("Session discarded.".to_string());
                     self.save_session();
+                    self.sync_auto_selection();
                 }
                 AppAction::Quit => {
                     self.should_quit = true;
@@ -348,7 +393,7 @@ impl AppState {
 
         let duration = self.timeline_state.duration;
 
-        match action {
+        match &action {
             AppAction::None => {}
             AppAction::Quit => {
                 self.should_quit = true;
@@ -376,23 +421,35 @@ impl AppState {
             }
             AppAction::SeekForward(n) => {
                 if let Some(player) = self.active_player_mut() {
-                    let _ = player.seek(n);
+                    let _ = player.seek(*n);
                 }
+                self.current_time = (self.current_time + *n).min(duration);
+                self.last_seek_time = std::time::Instant::now();
+                self.sync_auto_selection();
             }
             AppAction::SeekBackward(n) => {
                 if let Some(player) = self.active_player_mut() {
-                    let _ = player.seek(-n);
+                    let _ = player.seek(-*n);
                 }
+                self.current_time = (self.current_time - *n).max(0.0);
+                self.last_seek_time = std::time::Instant::now();
+                self.sync_auto_selection();
             }
             AppAction::SeekToStart => {
                 if let Some(player) = self.active_player_mut() {
                     let _ = player.seek_absolute(0.0);
                 }
+                self.current_time = 0.0;
+                self.last_seek_time = std::time::Instant::now();
+                self.sync_auto_selection();
             }
             AppAction::SeekToEnd => {
                 if let Some(player) = self.active_player_mut() {
                     let _ = player.seek_absolute(duration);
                 }
+                self.current_time = duration;
+                self.last_seek_time = std::time::Instant::now();
+                self.sync_auto_selection();
             }
             AppAction::SetInPoint => {
                 self.pending_in_point = Some(self.current_time);
@@ -414,6 +471,37 @@ impl AppState {
                     self.pending_in_point = None;
                     self.status_message = Some(format!("Segment added: {} - {}", self.format_time(s), self.format_time(e)));
                     self.save_session();
+                    self.sync_auto_selection();
+                } else if !self.segments.is_empty() {
+                    // Try to find the segment to the left of or containing the playhead
+                    let mut best_idx = None;
+                    for (i, seg) in self.segments.iter().enumerate() {
+                        if seg.start_seconds <= self.current_time {
+                            best_idx = Some(i);
+                        }
+                    }
+                    if let Some(idx) = best_idx {
+                        self.push_undo();
+                        let id = self.segments[idx].id.clone();
+                        {
+                            let seg = &mut self.segments[idx];
+                            seg.end_seconds = self.current_time;
+                            if seg.end_seconds < seg.start_seconds {
+                                std::mem::swap(&mut seg.start_seconds, &mut seg.end_seconds);
+                            }
+                        }
+                        self.segments.sort_by(|a, b| a.start_seconds.partial_cmp(&b.start_seconds).unwrap());
+                        // Re-select the modified segment
+                        if let Some(new_pos) = self.segments.iter().position(|s| s.id == id) {
+                            self.selected_segment = Some(new_pos);
+                            let s = self.segments[new_pos].start_seconds;
+                            let e = self.segments[new_pos].end_seconds;
+                            self.status_message = Some(format!("Segment updated: {} - {}", self.format_time(s), self.format_time(e)));
+                        }
+                        self.save_session();
+                    } else {
+                        self.status_message = Some("Set in-point first (Press 'a')".to_string());
+                    }
                 } else {
                     self.status_message = Some("Set in-point first (Press 'a')".to_string());
                 }
@@ -430,6 +518,7 @@ impl AppState {
                         }
                         self.status_message = Some("Segment deleted".to_string());
                         self.save_session();
+                        self.sync_auto_selection();
                     }
                 }
             }
@@ -458,6 +547,9 @@ impl AppState {
                         if let Some(player) = self.active_player_mut() {
                             let _ = player.seek_absolute(start);
                         }
+                        self.current_time = start;
+                        self.last_seek_time = std::time::Instant::now();
+                        self.sync_auto_selection();
                     }
                 }
             }
@@ -468,6 +560,9 @@ impl AppState {
                         if let Some(player) = self.active_player_mut() {
                             let _ = player.seek_absolute(end);
                         }
+                        self.current_time = end;
+                        self.last_seek_time = std::time::Instant::now();
+                        self.sync_auto_selection();
                     }
                 }
             }
@@ -486,10 +581,12 @@ impl AppState {
             AppAction::Undo => {
                 self.undo();
                 self.save_session();
+                self.sync_auto_selection();
             }
             AppAction::Redo => {
                 self.redo();
                 self.save_session();
+                self.sync_auto_selection();
             }
             AppAction::EditLabel => {
                 if self.selected_segment.is_some() {
@@ -510,12 +607,15 @@ impl AppState {
                         if let Some(player) = self.active_player_mut() {
                             let _ = player.seek_absolute(nearest);
                         }
+                        self.current_time = nearest;
+                        self.last_seek_time = std::time::Instant::now();
                         self.status_message = Some(format!("Snapped to keyframe: {}", self.format_time(nearest)));
+                        self.sync_auto_selection();
                     }
                 }
             }
             AppAction::OpenFile(path) => {
-                self.start_probing(&path);
+                self.start_probing(path);
             }
             AppAction::Export => {
                 if self.segments.is_empty() {
@@ -563,33 +663,58 @@ impl AppState {
                     self.status_message = Some("No source media file known for export. Run a local player or pass media via CLI arg.".to_string());
                 }
             }
+            AppAction::ExportSelected => {
+                if let Some(idx) = self.selected_segment {
+                    if let Some(path) = self.source_path.as_ref().and_then(|p| p.to_str()) {
+                        let (tx, rx) = std::sync::mpsc::channel();
+                        self.export_receiver = Some(rx);
+                        self.mode = AppMode::Export;
+                        self.is_exporting = true;
+                        let source = path.to_string();
+                        let segment = self.segments[idx].clone();
+                        std::thread::spawn(move || {
+                            match crate::export::export_separate(&source, &[segment], tx.clone()) {
+                                Ok(outputs) => { let _ = tx.send(crate::app::ExportMsg::Done(outputs)); }
+                                Err(e) => { let _ = tx.send(crate::app::ExportMsg::Failed(e)); }
+                            }
+                        });
+                        self.status_message = Some(format!("Exporting segment {}...", idx + 1));
+                    } else {
+                        self.status_message = Some("No source media file known for export.".to_string());
+                    }
+                } else {
+                    self.status_message = Some("Select a segment first to export it individually".to_string());
+                }
+            }
             AppAction::SwitchPlayer => {
                 self.cycle_player();
             }
             AppAction::MousePress { button, row, col } => {
-                if self.is_inside_timeline(row, col) {
-                    if button == MouseButton::Left {
+                if self.is_inside_timeline(*row, *col) {
+                    let pixel_x = col.saturating_sub(self.timeline_rect.0);
+                    let target_time = self.timeline_state.pixel_to_time(pixel_x, self.timeline_rect.2);
+
+                    if button == &MouseButton::Left {
                         self.is_dragging_timeline = true;
-                        self.drag_last_col = col;
+                        self.drag_last_col = *col;
                         self.drag_was_playing = self.player_playing;
                         if self.player_playing {
                             if let Some(p) = self.active_player_mut() {
                                 let _ = p.pause();
                             }
                         }
-                        let pixel_x = col.saturating_sub(self.timeline_rect.0);
-                        let target_time = self.timeline_state.pixel_to_time(pixel_x, self.timeline_rect.2);
                         if let Some(p) = self.active_player_mut() {
                             let _ = p.seek_absolute(target_time);
                         }
                         self.current_time = target_time.clamp(0.0, self.timeline_state.duration);
                         self.last_seek_time = std::time::Instant::now();
-                    } else if button == MouseButton::Right {
+                        self.sync_auto_selection();
+                    } else if button == &MouseButton::Right {
                         self.is_panning_timeline = true;
-                        self.drag_last_col = col;
+                        self.drag_last_col = *col;
                     }
-                } else if self.is_inside_segments(row, col) {
-                    if button == MouseButton::Left {
+                } else if self.is_inside_segments(*row, *col) {
+                    if button == &MouseButton::Left {
                         let click_row = row.saturating_sub(self.segments_rect.1);
                         let idx = click_row as usize;
                         if idx < self.segments.len() {
@@ -598,6 +723,8 @@ impl AppState {
                             if let Some(player) = self.active_player_mut() {
                                 let _ = player.seek_absolute(start);
                             }
+                            self.current_time = start;
+                            self.last_seek_time = std::time::Instant::now();
                         }
                     }
                 }
@@ -607,6 +734,7 @@ impl AppState {
                     let pixel_x = col.saturating_sub(self.timeline_rect.0);
                     let target_time = self.timeline_state.pixel_to_time(pixel_x, self.timeline_rect.2);
                     self.current_time = target_time.clamp(0.0, self.timeline_state.duration);
+                    
                     let now = std::time::Instant::now();
                     if now.duration_since(self.last_seek_time) >= std::time::Duration::from_millis(50) {
                         if let Some(p) = self.active_player_mut() {
@@ -614,11 +742,12 @@ impl AppState {
                         }
                         self.last_seek_time = now;
                     }
+                    self.sync_auto_selection();
                 } else if self.is_panning_timeline {
-                    let delta = col as i16 - self.drag_last_col as i16;
+                    let delta = *col as i16 - self.drag_last_col as i16;
                     // Pan timeline
                     self.timeline_state.pan(-delta, self.timeline_rect.2);
-                    self.drag_last_col = col;
+                    self.drag_last_col = *col;
                 }
             }
             AppAction::MouseRelease { row: _, col } => {
@@ -634,6 +763,8 @@ impl AppState {
                         }
                     }
                     self.current_time = target_time.clamp(0.0, self.timeline_state.duration);
+                    self.last_seek_time = std::time::Instant::now();
+                    self.sync_auto_selection();
                 } else if self.is_panning_timeline {
                     self.is_panning_timeline = false;
                 }
@@ -643,12 +774,13 @@ impl AppState {
                 // Zoom anchored at mouse position X
                 let pixel_x = col.saturating_sub(self.timeline_rect.0);
                 let anchor_time = self.timeline_state.pixel_to_time(pixel_x, self.timeline_rect.2);
-                if up {
+                if *up {
                     self.timeline_state.zoom_in(1.2, anchor_time);
                 } else {
                     self.timeline_state.zoom_out(1.2, anchor_time);
                 }
             }
+            AppAction::Char(_) | AppAction::Backspace => {}
         }
     }
 
@@ -662,6 +794,7 @@ impl AppState {
         let (tx, ty, tw, th) = self.timeline_rect;
         row >= ty && row < ty + th && col >= tx && col < tx + tw
     }
+
     fn is_inside_segments(&self, row: u16, col: u16) -> bool {
         let (sx, sy, sw, sh) = self.segments_rect;
         row >= sy && row < sy + sh && col >= sx && col < sx + sw
@@ -863,4 +996,3 @@ mod tests {
         let _ = fs::remove_file(&session_file);
     }
 }
-

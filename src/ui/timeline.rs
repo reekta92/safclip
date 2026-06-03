@@ -153,20 +153,29 @@ pub fn render(f: &mut Frame, state: &mut AppState, area: Rect, theme: &Theme) {
 
     // Fill segments on progress bar
     for (i, segment) in state.segments.iter().enumerate() {
+        let is_selected = Some(i) == state.selected_segment;
         let color = palette[i % palette.len()];
         let start_px = state.timeline_state.time_to_pixel(segment.start_seconds, width as u16) as i32;
         let end_px = state.timeline_state.time_to_pixel(segment.end_seconds, width as u16) as i32;
-        
         let start_clamp = start_px.clamp(0, width as i32) as usize;
         let end_clamp = end_px.clamp(0, width as i32) as usize;
-
         for x in start_clamp..end_clamp {
             if x < width {
                 bar_spans_top[x] = Span::styled("█", Style::default().fg(color));
                 bar_spans_bottom[x] = Span::styled("█", Style::default().fg(color));
             }
         }
-
+        // Add inward arrows for selected segment corners on the bar
+        if is_selected {
+            if start_clamp < width {
+                bar_spans_top[start_clamp] = Span::styled("▶", Style::default().fg(color).add_modifier(Modifier::BOLD));
+                bar_spans_bottom[start_clamp] = Span::styled("▶", Style::default().fg(color).add_modifier(Modifier::BOLD));
+            }
+            if end_clamp > 0 && end_clamp <= width {
+                bar_spans_top[end_clamp - 1] = Span::styled("◀", Style::default().fg(color).add_modifier(Modifier::BOLD));
+                bar_spans_bottom[end_clamp - 1] = Span::styled("◀", Style::default().fg(color).add_modifier(Modifier::BOLD));
+            }
+        }
         // Overlay segment label inside the top row
         let label = segment.label.as_deref().unwrap_or("");
         if !label.is_empty() {
@@ -207,15 +216,20 @@ pub fn render(f: &mut Frame, state: &mut AppState, area: Rect, theme: &Theme) {
 
     // Draw segment boundary markers
     for (i, segment) in state.segments.iter().enumerate() {
+        let is_selected = Some(i) == state.selected_segment;
         let color = palette[i % palette.len()];
         let start_px = state.timeline_state.time_to_pixel(segment.start_seconds, width as u16) as i32;
         let end_px = state.timeline_state.time_to_pixel(segment.end_seconds, width as u16) as i32;
-
+        let (left_marker, right_marker) = if is_selected {
+            ("▶", "◀")
+        } else {
+            ("[", "]")
+        };
         if start_px >= 0 && start_px < width as i32 {
-            marker_spans[start_px as usize] = Span::styled("[", Style::default().fg(color).add_modifier(Modifier::BOLD));
+            marker_spans[start_px as usize] = Span::styled(left_marker, Style::default().fg(color).add_modifier(Modifier::BOLD));
         }
         if end_px >= 0 && end_px < width as i32 {
-            marker_spans[end_px as usize] = Span::styled("]", Style::default().fg(color).add_modifier(Modifier::BOLD));
+            marker_spans[end_px as usize] = Span::styled(right_marker, Style::default().fg(color).add_modifier(Modifier::BOLD));
         }
     }
 

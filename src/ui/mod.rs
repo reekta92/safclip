@@ -9,6 +9,7 @@ pub mod status;
 pub mod theme;
 pub mod timeline;
 pub mod player_info;
+
 pub fn render(f: &mut Frame, state: &mut AppState) {
     let theme = theme::Theme::default();
 
@@ -30,6 +31,7 @@ pub fn render(f: &mut Frame, state: &mut AppState) {
             Constraint::Length(1),      // Status bar
         ])
         .split(area);
+
     header::render(f, state, chunks[0], &theme);
 
     let main_chunks = Layout::default()
@@ -54,8 +56,12 @@ pub fn render(f: &mut Frame, state: &mut AppState) {
 
     timeline::render(f, state, chunks[2], &theme);
     status::render(f, state, chunks[3], &theme);
+
     if state.mode == AppMode::Help {
         help::render(f, f.area(), &theme);
+    }
+    if state.mode == AppMode::EditLabel {
+        render_edit_label_popup(f, state, f.area(), &theme);
     }
     if state.mode == AppMode::SessionRestore {
         render_restore_popup(f, state, f.area(), &theme);
@@ -147,26 +153,70 @@ fn render_restore_popup(f: &mut Frame, state: &AppState, area: ratatui::layout::
     draw_popup_banner(f, popup_area, "RESTORE SESSION?", theme);
     f.render_widget(paragraph, popup_area);
 }
+
+fn render_edit_label_popup(f: &mut Frame, state: &AppState, area: ratatui::layout::Rect, theme: &theme::Theme) {
+    use ratatui::widgets::{Block, Clear, Paragraph};
+    use ratatui::style::{Style, Modifier};
+    use ratatui::layout::Alignment;
+
+    let block = Block::default()
+        .style(theme.popup_bg());
+
+    let mut text = Vec::new();
+    text.push(ratatui::text::Line::from(""));
+    text.push(ratatui::text::Line::from("Enter label for segment:"));
+    text.push(ratatui::text::Line::from(""));
+    text.push(ratatui::text::Line::from(ratatui::text::Span::styled(
+        format!(" > {}_ ", state.label_input),
+        Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)
+    )));
+    text.push(ratatui::text::Line::from(""));
+    text.push(ratatui::text::Line::from(vec![
+        ratatui::text::Span::raw("["),
+        ratatui::text::Span::styled("Enter", Style::default().fg(theme.success).add_modifier(Modifier::BOLD)),
+        ratatui::text::Span::raw("] Save  ·  ["),
+        ratatui::text::Span::styled("Esc", Style::default().fg(theme.destructive).add_modifier(Modifier::BOLD)),
+        ratatui::text::Span::raw("] Cancel"),
+    ]));
+
+    let paragraph = Paragraph::new(text)
+        .block(block)
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(theme.fg));
+
+    let popup_area = centered_rect(60, 25, area);
+
+    f.render_widget(Clear, popup_area);
+    draw_popup_banner(f, popup_area, "EDIT LABEL", theme);
+    f.render_widget(paragraph, popup_area);
+}
+
 fn render_probing_popup(f: &mut Frame, _state: &AppState, area: ratatui::layout::Rect, theme: &theme::Theme) {
     use ratatui::widgets::{Block, Clear, Paragraph};
     use ratatui::style::Style;
     use ratatui::layout::Alignment;
+
     let block = Block::default()
         .style(theme.popup_bg());
+
     let mut text = Vec::new();
     text.push(ratatui::text::Line::from(""));
     text.push(ratatui::text::Line::from("Probing video metadata..."));
     text.push(ratatui::text::Line::from("Please wait."));
     text.push(ratatui::text::Line::from(""));
+
     let paragraph = Paragraph::new(text)
         .block(block)
         .alignment(Alignment::Center)
         .style(Style::default().fg(theme.fg));
+
     let popup_area = centered_rect(50, 20, area);
+
     f.render_widget(Clear, popup_area);
     draw_popup_banner(f, popup_area, "LOADING", theme);
     f.render_widget(paragraph, popup_area);
 }
+
 fn centered_rect(percent_x: u16, percent_y: u16, r: ratatui::layout::Rect) -> ratatui::layout::Rect {
     let popup_layout = Layout::default()
         .direction(Direction::Vertical)
@@ -186,4 +236,3 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: ratatui::layout::Rect) -> ra
         ])
         .split(popup_layout[1])[1]
 }
-

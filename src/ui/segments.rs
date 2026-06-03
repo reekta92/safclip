@@ -51,7 +51,10 @@ pub fn render(f: &mut Frame, state: &mut AppState, area: Rect, theme: &Theme) {
                 Span::styled("· ", Style::default().fg(theme.muted))
             };
             let text_style = if is_selected {
-                Style::default().fg(seg_color).add_modifier(Modifier::BOLD)
+                Style::default()
+                    .bg(theme.accent)
+                    .fg(theme.highlight_fg)
+                    .add_modifier(Modifier::BOLD)
             } else {
                 Style::default().fg(seg_color)
             };

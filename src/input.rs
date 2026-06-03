@@ -37,6 +37,8 @@ pub enum AppAction {
     MouseScroll { up: bool, row: u16, col: u16 },
     RestoreSession,
     DiscardSession,
+    Char(char),
+    Backspace,
     None,
 }
 
@@ -87,6 +89,7 @@ fn handle_key_event(key: KeyEvent) -> AppAction {
         (KeyCode::Char('l'), KeyModifiers::ALT) => AppAction::PanRight,
 
         (KeyCode::Char('u'), KeyModifiers::NONE) => AppAction::Undo,
+        (KeyCode::Char('r'), KeyModifiers::NONE) => AppAction::EditLabel,
         (KeyCode::Char('r'), KeyModifiers::CONTROL) => AppAction::Redo,
 
         (KeyCode::Char('?'), _) | (KeyCode::Char('/'), KeyModifiers::SHIFT) => AppAction::ToggleHelp,
@@ -97,7 +100,8 @@ fn handle_key_event(key: KeyEvent) -> AppAction {
         (KeyCode::Char('n') | KeyCode::Char('N'), KeyModifiers::NONE) => AppAction::DiscardSession,
 
         (KeyCode::Tab, KeyModifiers::NONE) => AppAction::SwitchPlayer,
-
+        (KeyCode::Char(c), m) if m == KeyModifiers::NONE || m == KeyModifiers::SHIFT => AppAction::Char(c),
+        (KeyCode::Backspace, _) => AppAction::Backspace,
         _ => AppAction::None,
     }
 }
