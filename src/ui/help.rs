@@ -1,62 +1,81 @@
 use ratatui::{
     layout::{Alignment, Rect, Layout, Direction, Constraint},
-    style::{Color, Style},
-    widgets::{Block, Borders, Clear, Paragraph},
+    style::{Modifier, Style},
+    text::{Line, Span},
+    widgets::{Block, Clear, Paragraph},
     Frame,
 };
+use crate::ui::theme::Theme;
 
-pub fn render(f: &mut Frame, area: Rect) {
-    let help_text = "SAFCLIP KEYBINDINGS & CONTROLS
-═══════════════════════════════
+fn key_line(key: &str, desc: &str, theme: &Theme) -> Line<'static> {
+    Line::from(vec![
+        Span::styled(format!("  {:14}", key), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+        Span::styled(desc.to_string(), Style::default().fg(theme.muted)),
+    ])
+}
 
-Navigation:
-  ← / →          Seek ±1s
-  Shift+← / →     Seek ±5s
-  Alt+← / →       Seek ±10s
-  Home / End      Jump to start/end
-  K               Snap to nearest keyframe
-  Space           Play / Pause
+pub fn render(f: &mut Frame, area: Rect, theme: &Theme) {
+    let mut lines = Vec::new();
+    lines.push(Line::from(""));
 
-Timeline Zoom/Pan:
-  + / -           Zoom timeline in/out
-  Alt+h / l       Pan timeline left/right
+    // Section: Navigation
+    lines.push(Line::from(Span::styled("Navigation", Style::default().fg(theme.heading).add_modifier(Modifier::BOLD))));
+    lines.push(key_line("← / →", "Seek ±1s", theme));
+    lines.push(key_line("Shift+← / →", "Seek ±5s", theme));
+    lines.push(key_line("Alt+← / →", "Seek ±10s", theme));
+    lines.push(key_line("Home / End", "Jump to start/end", theme));
+    lines.push(key_line("K", "Snap to nearest keyframe", theme));
+    lines.push(key_line("Space", "Play / Pause", theme));
 
-Mouse Interactions (Timeline):
-  Left Click      Seek to clicked position
-  Left Drag       Scrub through media (pauses during scrub, resumes on release)
-  Scroll Wheel    Zoom timeline in/out anchored at mouse cursor
-  Right Drag      Pan zoomed timeline horizontally
+    // Section: Timeline
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled("Timeline", Style::default().fg(theme.heading).add_modifier(Modifier::BOLD))));
+    lines.push(key_line("+ / -", "Zoom timeline in/out", theme));
+    lines.push(key_line("Alt+h / l", "Pan timeline left/right", theme));
 
-Segments:
-  a               Set IN point
-  d               Set OUT point (creates segment)
-  Delete / x      Delete selected segment
-  ↑ / ↓           Select prev/next segment
+    // Section: Mouse
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled("Mouse Interactions", Style::default().fg(theme.heading).add_modifier(Modifier::BOLD))));
+    lines.push(key_line("Left Click", "Seek to clicked position", theme));
+    lines.push(key_line("Left Drag", "Scrub through media", theme));
+    lines.push(key_line("Scroll Wheel", "Zoom timeline at cursor", theme));
+    lines.push(key_line("Right Drag", "Pan zoomed timeline", theme));
 
-Export:
-  e               Export segments as separate clips
-  E (Shift+e)    Export merged clip
+    // Section: Segments
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled("Segments", Style::default().fg(theme.heading).add_modifier(Modifier::BOLD))));
+    lines.push(key_line("a", "Set IN point", theme));
+    lines.push(key_line("d", "Set OUT point (creates segment)", theme));
+    lines.push(key_line("Delete / x", "Delete selected segment", theme));
+    lines.push(key_line("↑ / ↓", "Select prev/next segment", theme));
 
-General:
-  Tab             Switch between active MPRIS players
-  u               Undo last change
-  Ctrl+r          Redo
-  ?               Toggle this help
-  q               Quit
-  Esc             Cancel / return to normal mode";
+    // Section: Export
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled("Export", Style::default().fg(theme.heading).add_modifier(Modifier::BOLD))));
+    lines.push(key_line("e", "Export segments as separate clips", theme));
+    lines.push(key_line("E (Shift+e)", "Export merged clip", theme));
 
-    let block = Block::default()
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Yellow));
+    // Section: General
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled("General", Style::default().fg(theme.heading).add_modifier(Modifier::BOLD))));
+    lines.push(key_line("Tab", "Switch active MPRIS players", theme));
+    lines.push(key_line("u", "Undo last change", theme));
+    lines.push(key_line("Ctrl+r", "Redo last change", theme));
+    lines.push(key_line("?", "Toggle this help", theme));
+    lines.push(key_line("q", "Quit", theme));
+    lines.push(key_line("Esc", "Cancel / normal mode", theme));
 
-    let paragraph = Paragraph::new(help_text)
+    let block = Block::default().style(theme.popup_bg());
+
+    let paragraph = Paragraph::new(lines)
         .block(block)
         .alignment(Alignment::Left)
-        .style(Style::default().fg(Color::White));
+        .style(Style::default().fg(theme.fg));
 
     let popup_area = centered_rect(65, 85, area);
 
     f.render_widget(Clear, popup_area);
+    crate::ui::draw_popup_banner(f, popup_area, "HELP & CONTROLS", theme);
     f.render_widget(paragraph, popup_area);
 }
 

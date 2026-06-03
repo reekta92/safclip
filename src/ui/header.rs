@@ -1,15 +1,17 @@
 use ratatui::{
     layout::{Alignment, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
-    widgets::Paragraph,
+    widgets::{Block, Borders, Padding, Paragraph},
     Frame,
 };
 use crate::app::AppState;
 use crate::player::PlayerController;
 use crate::model::AppMode;
 
-pub fn render(f: &mut Frame, state: &AppState, area: Rect) {
+use crate::ui::theme::Theme;
+
+pub fn render(f: &mut Frame, state: &AppState, area: Rect, theme: &Theme) {
     let player_name = state.active_player()
         .map(|p| p.identity())
         .unwrap_or_else(|| "No Player Connected".to_string());
@@ -36,17 +38,25 @@ pub fn render(f: &mut Frame, state: &AppState, area: Rect) {
     };
 
     let spans = vec![
-        Span::styled(format!("[{}] ", player_name), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-        Span::styled(title, Style::default().fg(Color::White)),
-        Span::raw(" | "),
-        Span::styled(time_str, Style::default().fg(Color::Gray)),
-        Span::raw(" | "),
-        Span::styled(mode_str, Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)),
+        Span::styled("▶ ", Style::default().fg(theme.accent)),
+        Span::styled(format!("{}  ", player_name), Style::default().fg(theme.accent).add_modifier(Modifier::BOLD)),
+        Span::styled(title, Style::default().fg(theme.fg)),
+        Span::styled("  ·  ", Style::default().fg(theme.muted)),
+        Span::styled(time_str, Style::default().fg(theme.muted)),
+        Span::styled("  ·  ", Style::default().fg(theme.muted)),
+        Span::styled(mode_str, Style::default().fg(theme.heading).add_modifier(Modifier::BOLD)),
     ];
+
+    let block = Block::default()
+        .borders(Borders::BOTTOM)
+        .border_style(Style::default().fg(theme.border))
+        .style(theme.header_bg())
+        .padding(Padding::new(2, 2, 0, 0));
 
     let header = Paragraph::new(Line::from(spans))
         .alignment(Alignment::Left)
-        .style(Style::default().bg(Color::DarkGray).fg(Color::White));
+        .block(block)
+        .style(Style::default().fg(theme.fg));
 
     f.render_widget(header, area);
 }
