@@ -5,7 +5,7 @@ SafClip is a terminal user interface (TUI) video clipping tool written in Rust. 
 ## Key Features
 
 * **Lossless Cuts**: Uses FFmpeg stream copying (`-c copy`) to cut and merge video files instantly without re-encoding.
-* **Keyframe Snapping**: Queries keyframes via `ffprobe` and snaps segment boundaries to them, preventing frozen or black frames at clip start.
+* **Keyframe Snapping**: Queries keyframes via `ffprobe` and snaps segment boundaries to them, preventing frozen or black frames at clip start. A "LOADING" popup is displayed while metadata probing is in progress.
 * **MPRIS Integration**: Syncs playback status, seek position, and track duration with active Linux media players (like MPV or VLC) over D-Bus.
 * **Zoomable Timeline**: A TUI timeline that can be zoomed and panned for millisecond-level precision.
 * **Mouse Scrubbing**: Click to seek, drag to scrub, scroll wheel to zoom (anchored at cursor), and right-drag to pan the timeline.
@@ -24,7 +24,7 @@ SafClip is a terminal user interface (TUI) video clipping tool written in Rust. 
    ```
 2. Run SafClip:
    ```bash
-   safclip-controller /path/to/video.mp4
+   safclip /path/to/video.mp4
    ```
 
 ## Keybindings

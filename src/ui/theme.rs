@@ -55,7 +55,7 @@ impl Theme {
         Style::default()
     }
     pub fn popup_bg(&self) -> Style {
-        Style::default()
+        Style::default().bg(Color::Rgb(24, 24, 30))
     }
     pub fn segment_palette(&self) -> [Color; 10] {
         [

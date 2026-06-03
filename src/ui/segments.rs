@@ -19,9 +19,8 @@ fn format_time(seconds: f64) -> String {
 
 use crate::ui::theme::Theme;
 
-pub fn render(f: &mut Frame, state: &AppState, area: Rect, theme: &Theme) {
+pub fn render(f: &mut Frame, state: &mut AppState, area: Rect, theme: &Theme) {
     f.render_widget(Block::default().style(theme.segments_bg()), area);
-
     let chunks = Layout::default()
         .direction(ratatui::layout::Direction::Vertical)
         .constraints([
@@ -30,7 +29,8 @@ pub fn render(f: &mut Frame, state: &AppState, area: Rect, theme: &Theme) {
             Constraint::Length(if state.pending_in_point.is_some() { 1 } else { 0 }), // In point
         ])
         .split(area);
-
+    // Save actual segments list coordinates in AppState for mouse hit-testing
+    state.segments_rect = (chunks[1].x, chunks[1].y, chunks[1].width, chunks[1].height);
     let header_para = Paragraph::new(Line::from(Span::styled(
         "Segments",
         Style::default().fg(theme.accent).add_modifier(Modifier::BOLD),

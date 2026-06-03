@@ -60,6 +60,9 @@ pub fn render(f: &mut Frame, state: &mut AppState) {
     if state.mode == AppMode::SessionRestore {
         render_restore_popup(f, state, f.area(), &theme);
     }
+    if state.is_probing {
+        render_probing_popup(f, state, f.area(), &theme);
+    }
 }
 
 pub(crate) fn draw_popup_banner(f: &mut Frame, popup_area: ratatui::layout::Rect, title: &str, theme: &theme::Theme) {
@@ -142,6 +145,26 @@ fn render_restore_popup(f: &mut Frame, state: &AppState, area: ratatui::layout::
 
     f.render_widget(Clear, popup_area);
     draw_popup_banner(f, popup_area, "RESTORE SESSION?", theme);
+    f.render_widget(paragraph, popup_area);
+}
+fn render_probing_popup(f: &mut Frame, _state: &AppState, area: ratatui::layout::Rect, theme: &theme::Theme) {
+    use ratatui::widgets::{Block, Clear, Paragraph};
+    use ratatui::style::Style;
+    use ratatui::layout::Alignment;
+    let block = Block::default()
+        .style(theme.popup_bg());
+    let mut text = Vec::new();
+    text.push(ratatui::text::Line::from(""));
+    text.push(ratatui::text::Line::from("Probing video metadata..."));
+    text.push(ratatui::text::Line::from("Please wait."));
+    text.push(ratatui::text::Line::from(""));
+    let paragraph = Paragraph::new(text)
+        .block(block)
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(theme.fg));
+    let popup_area = centered_rect(50, 20, area);
+    f.render_widget(Clear, popup_area);
+    draw_popup_banner(f, popup_area, "LOADING", theme);
     f.render_widget(paragraph, popup_area);
 }
 fn centered_rect(percent_x: u16, percent_y: u16, r: ratatui::layout::Rect) -> ratatui::layout::Rect {

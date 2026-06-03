@@ -42,7 +42,7 @@ pub struct AppState {
     
     pub terminal_size: (u16, u16),
     pub timeline_rect: (u16, u16, u16, u16), // x, y, width, height
-
+    pub segments_rect: (u16, u16, u16, u16), // x, y, width, height
     // Mouse drag scrubbing states
     pub is_dragging_timeline: bool,
     pub is_panning_timeline: bool,
@@ -79,6 +79,7 @@ impl AppState {
             player_playing: false,
             terminal_size: (0, 0),
             timeline_rect: (0, 0, 0, 0),
+            segments_rect: (0, 0, 0, 0),
             is_dragging_timeline: false,
             is_panning_timeline: false,
             drag_last_col: 0,
@@ -579,6 +580,18 @@ impl AppState {
                         self.is_panning_timeline = true;
                         self.drag_last_col = col;
                     }
+                } else if self.is_inside_segments(row, col) {
+                    if button == MouseButton::Left {
+                        let click_row = row.saturating_sub(self.segments_rect.1);
+                        let idx = click_row as usize;
+                        if idx < self.segments.len() {
+                            self.selected_segment = Some(idx);
+                            let start = self.segments[idx].start_seconds;
+                            if let Some(player) = self.active_player_mut() {
+                                let _ = player.seek_absolute(start);
+                            }
+                        }
+                    }
                 }
             }
             AppAction::MouseDrag { row: _, col } => {
@@ -633,6 +646,10 @@ impl AppState {
     fn is_inside_timeline(&self, row: u16, col: u16) -> bool {
         let (tx, ty, tw, th) = self.timeline_rect;
         row >= ty && row < ty + th && col >= tx && col < tx + tw
+    }
+    fn is_inside_segments(&self, row: u16, col: u16) -> bool {
+        let (sx, sy, sw, sh) = self.segments_rect;
+        row >= sy && row < sy + sh && col >= sx && col < sx + sw
     }
 
     pub fn push_undo(&mut self) {
