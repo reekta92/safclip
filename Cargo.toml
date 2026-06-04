@@ -2,6 +2,9 @@
 name = "safclip-controller"
 version = "0.1.0"
 edition = "2021"
+author = "Your Name <you@example.com>"
+description = "A brief description of the safclip controller application."
+license = "MIT"
 
 [lib]
 name = "safclip_controller"
