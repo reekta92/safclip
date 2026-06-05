@@ -13,11 +13,11 @@ use crate::ui::theme::Theme;
 
 pub fn render(f: &mut Frame, state: &AppState, area: Rect, theme: &Theme) {
     let player_name = state.active_player()
-        .map(|p| p.identity())
+        .map(|p: &Box<dyn PlayerController>| p.identity())
         .unwrap_or_else(|| "No Player Connected".to_string());
     
     let title = state.active_player()
-        .and_then(|p| p.track_title())
+        .and_then(|p: &Box<dyn PlayerController>| p.track_title())
         .or_else(|| {
             state.source_path
                 .as_ref()

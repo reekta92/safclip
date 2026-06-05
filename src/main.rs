@@ -46,14 +46,24 @@ fn main() -> Result<()> {
             last_poll = now;
         }
 
-        // Draw TUI
-        terminal.draw(|f| ui::render(f, &mut state))?;
+        // Draw TUI only if dirty
+        if state.is_dirty {
+            terminal.draw(|f| ui::render(f, &mut state))?;
+            state.is_dirty = false;
+        }
 
-        // Poll for input events
-        if event::poll(Duration::from_millis(20))? {
+        // Poll for input events with adaptive timeout
+        // 8ms (125Hz) when playing or dirty to keep it snappy, 50ms when idle
+        let timeout = if state.player_playing || state.is_dirty {
+            Duration::from_millis(8)
+        } else {
+            Duration::from_millis(50)
+        };
+        if event::poll(timeout)? {
             match event::read()? {
                 event::Event::Resize(w, h) => {
                     state.set_terminal_size(w, h);
+                    state.is_dirty = true;
                 }
                 other => {
                     let action = input::handle_event(other);

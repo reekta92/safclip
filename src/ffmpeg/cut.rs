@@ -34,39 +34,29 @@ pub fn snap_bounds_to_keyframes(
         return Ok((start, end));
     }
 
-    let mut normalized = keyframes
-        .iter()
-        .copied()
-        .filter(|value| value.is_finite() && *value >= 0.0 && *value <= duration_seconds)
-        .collect::<Vec<_>>();
+    // Assume keyframes are already sorted and include 0.0 and duration_seconds
+    // as ensured by probe.rs
+    let idx_start = keyframes.partition_point(|&k| k <= start);
+    let snapped_start = if idx_start == 0 {
+        keyframes[0]
+    } else {
+        keyframes[idx_start - 1]
+    };
 
-    normalized.push(0.0);
-    normalized.push(duration_seconds);
-    normalized.sort_by(|left, right| left.total_cmp(right));
-    normalized.dedup_by(|left, right| (*left - *right).abs() <= f64::EPSILON);
-
-    let mut snapped_start = normalized[0];
-    for value in &normalized {
-        if *value <= start {
-            snapped_start = *value;
-        } else {
-            break;
-        }
-    }
-
-    let mut snapped_end = *normalized.last().unwrap_or(&duration_seconds);
-    for value in &normalized {
-        if *value >= end {
-            snapped_end = *value;
-            break;
-        }
-    }
+    let idx_end = keyframes.partition_point(|&k| k < end);
+    let mut snapped_end = if idx_end == keyframes.len() {
+        keyframes[keyframes.len() - 1]
+    } else {
+        keyframes[idx_end]
+    };
 
     if snapped_end <= snapped_start {
-        let maybe_next = normalized.iter().copied().find(|value| *value > snapped_start);
-        snapped_end = maybe_next.ok_or_else(|| {
-            "Unable to find a keyframe-aligned end after snapped start".to_string()
-        })?;
+        let next_idx = idx_start; // partition_point(|&k| k <= start) is the first k > start
+        if next_idx < keyframes.len() {
+            snapped_end = keyframes[next_idx];
+        } else {
+            return Err("Unable to find a keyframe-aligned end after snapped start".to_string());
+        }
     }
 
     Ok((snapped_start, snapped_end))

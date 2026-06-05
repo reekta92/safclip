@@ -70,6 +70,7 @@ pub fn render(f: &mut Frame, state: &AppState, area: Rect, theme: &Theme) {
         lines.push(Line::from(Span::styled("  (No MPRIS players found)", Style::default().fg(theme.muted))));
     } else {
         for (i, player) in state.available_players.iter().enumerate() {
+            let player: &Box<dyn PlayerController> = player;
             let is_active = Some(i) == state.active_player_index;
             let marker = if is_active { "● " } else { "○ " };
             let style = if is_active {

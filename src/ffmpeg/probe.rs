@@ -14,16 +14,6 @@ struct ProbeFormat {
     format_name: Option<String>,
 }
 
-#[derive(Debug, Deserialize)]
-struct KeyframeJson {
-    frames: Option<Vec<KeyframeFrame>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct KeyframeFrame {
-    pts_time: Option<String>,
-}
-
 pub fn probe_media(source_path: &str) -> Result<MediaMetadata, String> {
     let source = Path::new(source_path);
     if !source.exists() {
@@ -88,7 +78,7 @@ pub fn probe_keyframes(source: &Path) -> Result<Vec<f64>, String> {
         .arg("-show_entries")
         .arg("frame=pts_time")
         .arg("-of")
-        .arg("json")
+        .arg("csv=p=0")
         .arg(source)
         .output()
         .map_err(|error| format!("Failed to run ffprobe for keyframes: {error}"))?;
@@ -100,15 +90,13 @@ pub fn probe_keyframes(source: &Path) -> Result<Vec<f64>, String> {
         ));
     }
 
-    let parsed: KeyframeJson = serde_json::from_slice(&output.stdout)
-        .map_err(|error| format!("Invalid keyframe JSON output: {error}"))?;
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut keyframes = Vec::new();
 
-    let frames = parsed.frames.unwrap_or_default();
-    let mut keyframes = Vec::with_capacity(frames.len());
-
-    for frame in frames {
-        if let Some(pts_time) = frame.pts_time {
-            if let Ok(value) = pts_time.parse::<f64>() {
+    for line in stdout.lines() {
+        let line = line.trim();
+        if !line.is_empty() {
+            if let Ok(value) = line.parse::<f64>() {
                 keyframes.push(value);
             }
         }

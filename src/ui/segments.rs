@@ -1,3 +1,4 @@
+use crate::model::format_time;
 use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
@@ -7,15 +8,6 @@ use ratatui::{
 };
 use crate::app::AppState;
 
-fn format_time(seconds: f64) -> String {
-    if !seconds.is_finite() || seconds < 0.0 {
-        return "00:00.000".to_string();
-    }
-    let minutes = (seconds / 60.0).floor() as u64;
-    let secs = (seconds % 60.0).floor() as u64;
-    let millis = ((seconds % 1.0) * 1000.0).floor() as u64;
-    format!("{:02}:{:02}.{:03}", minutes, secs, millis)
-}
 
 use crate::ui::theme::Theme;
 

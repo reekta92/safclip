@@ -1,3 +1,14 @@
+const GLYPH_TICK_CURSOR: &str = "▼";
+const GLYPH_TICK_MAJOR: &str = "┬";
+const GLYPH_TICK_LINE: &str = "─";
+const GLYPH_BAR_PLAYED: &str = "⠶";
+const GLYPH_BAR_UNPLAYED: &str = "⠤";
+const GLYPH_MARKER_KEYFRAME: &str = "^";
+const GLYPH_MARKER_START: &str = "[";
+const GLYPH_MARKER_END: &str = "]";
+const GLYPH_MARKER_START_SEL: &str = "▶";
+const GLYPH_MARKER_END_SEL: &str = "◀";
+
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
@@ -69,7 +80,7 @@ pub fn render(f: &mut Frame, state: &mut AppState, area: Rect, theme: &Theme) {
         60.0, 120.0, 300.0, 600.0, 1800.0, 3600.0
     ];
     let s = steps.iter()
-        .min_by(|&&a, &&b| {
+        .min_by(|&&a: &&f64, &&b: &&f64| {
             let diff_a = (a - approx_interval).abs();
             let diff_b = (b - approx_interval).abs();
             diff_a.partial_cmp(&diff_b).unwrap_or(std::cmp::Ordering::Equal)
@@ -78,7 +89,7 @@ pub fn render(f: &mut Frame, state: &mut AppState, area: Rect, theme: &Theme) {
         .unwrap_or(10.0);
 
     let mut ruler_chars = vec![' '; width];
-    let mut tick_chars = vec!['─'; width];
+    let mut tick_chars = vec![GLYPH_TICK_LINE.chars().next().unwrap(); width];
 
     let first_tick_time = (start_time / s).floor() * s;
     let mut tick_time = first_tick_time;
@@ -87,7 +98,7 @@ pub fn render(f: &mut Frame, state: &mut AppState, area: Rect, theme: &Theme) {
             let px = state.timeline_state.time_to_pixel(tick_time, width as u16) as i32;
             if px >= 0 && px < width as i32 {
                 // Place a tick mark
-                tick_chars[px as usize] = '┬';
+                tick_chars[px as usize] = GLYPH_TICK_MAJOR.chars().next().unwrap();
                 
                 // Format the label
                 let label = format_time_ruler(tick_time);
@@ -111,8 +122,9 @@ pub fn render(f: &mut Frame, state: &mut AppState, area: Rect, theme: &Theme) {
 
     // Render separator line with top cursor guide
     if cursor_px >= 0 && cursor_px < width as i32 {
-        tick_chars[cursor_px as usize] = '▼';
+        tick_chars[cursor_px as usize] = GLYPH_TICK_CURSOR.chars().next().unwrap();
     }
+
 
     // Convert ruler chars to line
     let ruler_str: String = ruler_chars.into_iter().collect();
@@ -120,16 +132,31 @@ pub fn render(f: &mut Frame, state: &mut AppState, area: Rect, theme: &Theme) {
     f.render_widget(Paragraph::new(ruler_line).block(Block::default().style(theme.timeline_bg())), ruler_area);
 
     // Convert tick chars to line
-    let mut tick_spans = Vec::with_capacity(width);
-    for &ch in &tick_chars {
-        if ch == '▼' {
-            tick_spans.push(Span::styled(ch.to_string(), Style::default().fg(theme.heading).add_modifier(Modifier::BOLD)));
-        } else if ch == '┬' {
-            tick_spans.push(Span::styled(ch.to_string(), Style::default().fg(theme.accent)));
-        } else {
-            tick_spans.push(Span::styled(ch.to_string(), Style::default().fg(theme.muted)));
+    // Convert tick chars to line with run-length encoding
+    let mut tick_spans = Vec::new();
+    if width > 0 {
+        let mut start = 0;
+        while start < width {
+            let ch = tick_chars[start];
+            let mut end = start + 1;
+            while end < width && tick_chars[end] == ch {
+                end += 1;
+            }
+
+            let style = if ch == GLYPH_TICK_CURSOR.chars().next().unwrap() {
+                Style::default().fg(theme.heading).add_modifier(Modifier::BOLD)
+            } else if ch == GLYPH_TICK_MAJOR.chars().next().unwrap() {
+                Style::default().fg(theme.accent)
+            } else {
+                Style::default().fg(theme.muted)
+            };
+
+            let s: String = tick_chars[start..end].iter().collect();
+            tick_spans.push(Span::styled(s, style));
+            start = end;
         }
     }
+
     f.render_widget(Paragraph::new(Line::from(tick_spans)).block(Block::default().style(theme.timeline_bg())), sep_area);
 
     // 1. Thicker Progress Bar (Solid blocks)
@@ -137,15 +164,13 @@ pub fn render(f: &mut Frame, state: &mut AppState, area: Rect, theme: &Theme) {
     let unplayed_color = Color::Rgb(50, 50, 50);
     
     // Fill initially with unplayed dark braille dots (⠤)
-    let mut bar_spans_top = vec![Span::styled("⠤", Style::default().fg(unplayed_color)); width];
-    let mut bar_spans_bottom = vec![Span::styled("⠤", Style::default().fg(unplayed_color)); width];
+    let mut bar_spans_top = vec![Span::styled(GLYPH_BAR_UNPLAYED, Style::default().fg(unplayed_color)); width];
+    let mut bar_spans_bottom = vec![Span::styled(GLYPH_BAR_UNPLAYED, Style::default().fg(unplayed_color)); width];
     // Fill played portion (up to the cursor) with thick braille dots (⠶)
     let cursor_clamp = cursor_px.clamp(0, width as i32) as usize;
     for x in 0..cursor_clamp {
-        if x < width {
-            bar_spans_top[x] = Span::styled("⠶", Style::default().fg(played_color));
-            bar_spans_bottom[x] = Span::styled("⠶", Style::default().fg(played_color));
-        }
+        bar_spans_top[x] = Span::styled(GLYPH_BAR_PLAYED, Style::default().fg(played_color));
+        bar_spans_bottom[x] = Span::styled(GLYPH_BAR_PLAYED, Style::default().fg(played_color));
     }
 
     // Segment color palette
@@ -159,23 +184,25 @@ pub fn render(f: &mut Frame, state: &mut AppState, area: Rect, theme: &Theme) {
         let end_px = state.timeline_state.time_to_pixel(segment.end_seconds, width as u16) as i32;
         let start_clamp = start_px.clamp(0, width as i32) as usize;
         let end_clamp = end_px.clamp(0, width as i32) as usize;
+
         for x in start_clamp..end_clamp {
-            if x < width {
-                bar_spans_top[x] = Span::styled("█", Style::default().fg(color));
-                bar_spans_bottom[x] = Span::styled("█", Style::default().fg(color));
-            }
+            let glyph = if x < cursor_clamp { GLYPH_BAR_PLAYED } else { GLYPH_BAR_UNPLAYED };
+            bar_spans_top[x] = Span::styled(glyph, Style::default().bg(color).fg(theme.highlight_fg));
+            bar_spans_bottom[x] = Span::styled(glyph, Style::default().bg(color).fg(theme.highlight_fg));
         }
+
         // Add inward arrows for selected segment corners on the bar
         if is_selected {
             if start_clamp < width {
-                bar_spans_top[start_clamp] = Span::styled("▶", Style::default().fg(color).add_modifier(Modifier::BOLD));
-                bar_spans_bottom[start_clamp] = Span::styled("▶", Style::default().fg(color).add_modifier(Modifier::BOLD));
+                bar_spans_top[start_clamp] = Span::styled(GLYPH_MARKER_START_SEL, Style::default().bg(color).fg(theme.highlight_fg).add_modifier(Modifier::BOLD));
+                bar_spans_bottom[start_clamp] = Span::styled(GLYPH_MARKER_START_SEL, Style::default().bg(color).fg(theme.highlight_fg).add_modifier(Modifier::BOLD));
             }
             if end_clamp > 0 && end_clamp <= width {
-                bar_spans_top[end_clamp - 1] = Span::styled("◀", Style::default().fg(color).add_modifier(Modifier::BOLD));
-                bar_spans_bottom[end_clamp - 1] = Span::styled("◀", Style::default().fg(color).add_modifier(Modifier::BOLD));
+                bar_spans_top[end_clamp - 1] = Span::styled(GLYPH_MARKER_END_SEL, Style::default().bg(color).fg(theme.highlight_fg).add_modifier(Modifier::BOLD));
+                bar_spans_bottom[end_clamp - 1] = Span::styled(GLYPH_MARKER_END_SEL, Style::default().bg(color).fg(theme.highlight_fg).add_modifier(Modifier::BOLD));
             }
         }
+
         // Overlay segment label inside the top row
         let label = segment.label.as_deref().unwrap_or("");
         if !label.is_empty() {
@@ -206,10 +233,13 @@ pub fn render(f: &mut Frame, state: &mut AppState, area: Rect, theme: &Theme) {
 
     // Draw keyframes as '^'
     if let Some(metadata) = &state.metadata {
-        for &kf in &metadata.keyframes_seconds {
+        let (start_time, end_time) = state.timeline_state.visible_range(width as u16);
+        let lo = metadata.keyframes_seconds.partition_point(|&k| k < start_time);
+        let hi = metadata.keyframes_seconds.partition_point(|&k| k <= end_time);
+        for &kf in &metadata.keyframes_seconds[lo..hi] {
             let px = state.timeline_state.time_to_pixel(kf, width as u16) as i32;
             if px >= 0 && px < width as i32 {
-                marker_spans[px as usize] = Span::styled("^", Style::default().fg(theme.muted));
+                marker_spans[px as usize] = Span::styled(GLYPH_MARKER_KEYFRAME, Style::default().fg(theme.muted));
             }
         }
     }
@@ -221,9 +251,9 @@ pub fn render(f: &mut Frame, state: &mut AppState, area: Rect, theme: &Theme) {
         let start_px = state.timeline_state.time_to_pixel(segment.start_seconds, width as u16) as i32;
         let end_px = state.timeline_state.time_to_pixel(segment.end_seconds, width as u16) as i32;
         let (left_marker, right_marker) = if is_selected {
-            ("▶", "◀")
+            (GLYPH_MARKER_START_SEL, GLYPH_MARKER_END_SEL)
         } else {
-            ("[", "]")
+            (GLYPH_MARKER_START, GLYPH_MARKER_END)
         };
         if start_px >= 0 && start_px < width as i32 {
             marker_spans[start_px as usize] = Span::styled(left_marker, Style::default().fg(color).add_modifier(Modifier::BOLD));

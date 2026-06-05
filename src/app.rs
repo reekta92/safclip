@@ -2,7 +2,6 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 use crate::model::*;
 use crate::input::AppAction;
-use crate::player::mpris::MprisPlayer;
 use crate::player::PlayerController;
 use crate::timeline::TimelineState;
 use crossterm::event::MouseButton;
@@ -36,7 +35,7 @@ pub struct AppState {
     pub probe_receiver: Option<mpsc::Receiver<Result<MediaMetadata, String>>>,
     pub is_probing: bool,
 
-    pub available_players: Vec<MprisPlayer>,
+    pub available_players: Vec<Box<dyn PlayerController>>,
     pub active_player_index: Option<usize>,
     pub player_playing: bool,
     
@@ -55,11 +54,14 @@ pub struct AppState {
     pub last_seek_time: std::time::Instant,
     pub last_click_time: std::time::Instant,
     pub last_click_pos: (u16, u16),
+    pub player_discovery: Option<crate::player::discovery::PlayerDiscovery>,
+    pub is_dirty: bool,
 }
 
 impl AppState {
     pub fn new() -> Self {
         Self {
+            is_dirty: true,
             source_path: None,
             cli_source_path: None,
             metadata: None,
@@ -78,6 +80,7 @@ impl AppState {
             probe_receiver: None,
             is_probing: false,
             available_players: Vec::new(),
+            player_discovery: crate::player::discovery::PlayerDiscovery::new().ok(),
             active_player_index: None,
             player_playing: false,
             terminal_size: (0, 0),
@@ -100,16 +103,16 @@ impl AppState {
         self.terminal_size = (w, h);
     }
 
-    pub fn active_player(&self) -> Option<&MprisPlayer> {
+    pub fn active_player(&self) -> Option<&Box<dyn PlayerController>> {
         self.active_player_index.and_then(|idx| self.available_players.get(idx))
     }
 
-    pub fn active_player_mut(&mut self) -> Option<&mut MprisPlayer> {
+    pub fn active_player_mut(&mut self) -> Option<&mut Box<dyn PlayerController>> {
         self.active_player_index.and_then(|idx| self.available_players.get_mut(idx))
     }
 
     pub fn refresh_players(&mut self) {
-        if let Ok(discovery) = crate::player::discovery::PlayerDiscovery::new() {
+        if let Some(discovery) = &self.player_discovery {
             if let Ok(players) = discovery.list_players() {
                 // Keep the active player if it still exists
                 let mut still_valid = false;
@@ -191,7 +194,7 @@ impl AppState {
     pub fn poll_player(&mut self) {
         // Periodically refresh available players (every ~1s or 10 poll cycles)
         self.poll_count = self.poll_count.wrapping_add(1);
-        if self.poll_count % 10 == 0 {
+        if self.poll_count % 50 == 0 {
             self.refresh_players();
         }
 
@@ -247,13 +250,18 @@ impl AppState {
                     let player = &self.available_players[idx];
                     (player.position(), player.duration(), !player.is_paused(), player.source_path())
                 };
-                
+
                 // INHIBIT POSITION POLLING DURING INTERACTION
                 if !self.is_dragging_timeline && std::time::Instant::now().duration_since(self.last_seek_time) > std::time::Duration::from_millis(150) {
-                    self.current_time = pos;
+                    if (self.current_time - pos).abs() > 0.001 {
+                        self.current_time = pos;
+                        self.is_dirty = true;
+                    }
                 }
-                self.player_playing = playing;
-
+                if self.player_playing != playing {
+                    self.player_playing = playing;
+                    self.is_dirty = true;
+                }
                 // Sync timeline duration if timeline duration is 0 but player reports a positive duration
                 if duration > 0.0 && self.timeline_state.duration <= 0.0 {
                     self.timeline_state = TimelineState::new(duration);
@@ -332,6 +340,7 @@ impl AppState {
     }
 
     pub fn apply_action(&mut self, action: AppAction) {
+        self.is_dirty = true;
         if self.mode == AppMode::EditLabel {
             match &action {
                 AppAction::Char(c) => {
@@ -601,9 +610,23 @@ impl AppState {
             }
             AppAction::SnapToKeyframe => {
                 if let Some(meta) = &self.metadata {
-                    if let Some(&nearest) = meta.keyframes_seconds.iter().min_by(|a, b| {
-                        (*a - self.current_time).abs().partial_cmp(&(*b - self.current_time).abs()).unwrap()
-                    }) {
+                    let kfs = &meta.keyframes_seconds;
+                    if !kfs.is_empty() {
+                        let idx = kfs.partition_point(|&k| k < self.current_time);
+                        let nearest = if idx == 0 {
+                            kfs[0]
+                        } else if idx == kfs.len() {
+                            kfs[kfs.len() - 1]
+                        } else {
+                            let a = kfs[idx - 1];
+                            let b = kfs[idx];
+                            if (a - self.current_time).abs() < (b - self.current_time).abs() {
+                                a
+                            } else {
+                                b
+                            }
+                        };
+
                         if let Some(player) = self.active_player_mut() {
                             let _ = player.seek_absolute(nearest);
                         }
@@ -786,7 +809,11 @@ impl AppState {
 
     fn save_session(&self) {
         if let Some(source_path) = &self.source_path {
-            let _ = crate::session::save(source_path, &self.segments);
+            let path = source_path.clone();
+            let segments = self.segments.clone();
+            std::thread::spawn(move || {
+                let _ = crate::session::save(&path, &segments);
+            });
         }
     }
 
@@ -846,6 +873,11 @@ impl AppState {
         }
     }
 
+    pub fn format_time(&self, seconds: f64) -> String {
+        crate::model::format_time(seconds)
+    }
+
+
     pub fn timecode(&self) -> String {
         self.format_time(self.current_time)
     }
@@ -854,20 +886,6 @@ impl AppState {
         self.format_time(self.timeline_state.duration)
     }
 
-    pub fn format_time(&self, seconds: f64) -> String {
-        if !seconds.is_finite() || seconds < 0.0 {
-            return "00:00.000".to_string();
-        }
-        let h = (seconds / 3600.0).floor() as u32;
-        let m = ((seconds % 3600.0) / 60.0).floor() as u32;
-        let s = (seconds % 60.0).floor() as u32;
-        let ms = ((seconds.fract()) * 1000.0).round() as u32;
-        if h > 0 {
-            format!("{h:02}:{m:02}:{s:02}.{ms:03}")
-        } else {
-            format!("{m:02}:{s:02}.{ms:03}")
-        }
-    }
 }
 
 #[cfg(test)]
@@ -986,6 +1004,9 @@ mod tests {
         assert_eq!(state.mode, AppMode::Normal);
         assert_eq!(state.segments.len(), 0);
         assert!(state.pending_session.is_none());
+
+        // Wait a bit for the background save to complete
+        std::thread::sleep(std::time::Duration::from_millis(100));
 
         let session_file = crate::session::session_path(&test_video);
         assert!(session_file.exists());
